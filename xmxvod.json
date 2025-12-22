@@ -3,7 +3,7 @@
         "id": "api_4",
         "name": "TV-CK资源",
         "api": "https://ckzy.me/api.php/provide/vod",
-        "nsfw": false,
+        "nsfw": true,
         "type": 0,
         "extra": {
             "gfw": false
