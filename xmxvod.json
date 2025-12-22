@@ -1,22 +1,42 @@
 [
-  {
-    "id": "Xxibaoziyuan",
-    "name": "X细胞资源",
-    "api": "https://www.xxibaozyw.com/api.php/provide/vod",
-    "nsfw": true,
-    "type": 0,
-    "extra": {
-      "gfw": false
+    {
+        "id": "api_2",
+        "name": "AV-155资源",
+        "api": "https://155api.com/api.php/provide/vod",
+        "nsfw": true,
+        "type": 0,
+        "extra": {
+            "gfw": false
+        }
+    },
+    {
+        "id": "api_52",
+        "name": "AV-91麻豆",
+        "api": "https://91md.me/api.php/provide/vod",
+        "nsfw": true,
+        "type": 0,
+        "extra": {
+            "gfw": false
+        }
+    },
+    {
+        "id": "api_52",
+        "name": "AV-91麻豆",
+        "api": "https://91md.me/api.php/provide/vod",
+        "nsfw": true,
+        "type": 0,
+        "extra": {
+            "gfw": false
+        }
+    },
+    {
+        "id": "api_30",
+        "name": "AV-百万资源",
+        "api": "https://api.bwzyz.com/api.php/provide/vod",
+        "nsfw": true,
+        "type": 0,
+        "extra": {
+            "gfw": false
+        }
     }
-  },
-  {
-    "id": "91shipin",
-    "name": "91视频",
-    "api": "https://91av.cyou/api.php/provide/vod/",
-    "nsfw": true,
-    "type": 0,
-    "extra": {
-      "gfw": false
-    }
-  }
 ]
