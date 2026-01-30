@@ -6,7 +6,9 @@ import { ChevronUp } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
+import { isAIRecommendFeatureDisabled } from '@/lib/ai-recommend.client';
 import { GetBangumiCalendarData } from '@/lib/bangumi.client';
 import {
   getDoubanCategories,
@@ -22,6 +24,9 @@ import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
 import VirtualDoubanGrid, { VirtualDoubanGridRef } from '@/components/VirtualDoubanGrid';
 
+// 🔧 统一分页常量 - 防止分页步长不一致导致重复数据
+const PAGE_SIZE = 25;
+
 function DoubanPageClient() {
   const searchParams = useSearchParams();
   const [doubanData, setDoubanData] = useState<DoubanItem[]>([]);
@@ -33,6 +38,10 @@ function DoubanPageClient() {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // 🚀 智能防抖追踪：首次挂载立即执行
+  const isFirstMountRef = useRef(true);
+  // 🛡️ 请求生命周期管理：防止同一 cacheKey 的并发请求
+  const pendingCacheKeyRef = useRef<string | null>(null);
   // 返回顶部按钮显示状态
   const [showBackToTop, setShowBackToTop] = useState(false);
   // VirtualDoubanGrid ref for scroll control
@@ -58,6 +67,9 @@ function DoubanPageClient() {
   });
 
   const type = searchParams.get('type') || 'movie';
+
+  // 🚀 智能防抖追踪：Tab 切换立即执行
+  const prevTypeRef = useRef<string>(type);
 
   // 获取 runtimeConfig 中的自定义分类数据
   const [customCategories, setCustomCategories] = useState<
@@ -126,6 +138,12 @@ function DoubanPageClient() {
 
   // 页面级别的AI权限检测 - 只检测一次
   useEffect(() => {
+    if (isAIRecommendFeatureDisabled()) {
+      setAiEnabled(false);
+      setAiCheckComplete(true);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -334,7 +352,7 @@ function DoubanPageClient() {
           kind: 'tv' as const,
           category: type,
           type: secondarySelection,
-          pageLimit: 25,
+          pageLimit: PAGE_SIZE,
           pageStart,
         };
       }
@@ -344,7 +362,7 @@ function DoubanPageClient() {
         kind: type as 'tv' | 'movie',
         category: primarySelection,
         type: secondarySelection,
-        pageLimit: 25,
+        pageLimit: PAGE_SIZE,
         pageStart,
       };
     },
@@ -362,6 +380,16 @@ function DoubanPageClient() {
       selectedWeekday,
       currentPage: 0,
     };
+
+    // 🛡️ 生成 cacheKey 用于防并发检查
+    const cacheKey = `${type}-${primarySelection}-${secondarySelection}-${selectedWeekday}-${JSON.stringify(multiLevelValues)}`;
+
+    // 🛡️ 防止同一 cacheKey 的并发请求
+    if (pendingCacheKeyRef.current === cacheKey) {
+      console.log('[Douban] 跳过并发请求:', cacheKey);
+      return;
+    }
+    pendingCacheKeyRef.current = cacheKey;
 
     try {
       setLoading(true);
@@ -384,7 +412,7 @@ function DoubanPageClient() {
           data = await getDoubanList({
             tag: selectedCategory.query,
             type: selectedCategory.type,
-            pageLimit: 25,
+            pageLimit: PAGE_SIZE,
             pageStart: 0,
           });
         } else {
@@ -419,7 +447,7 @@ function DoubanPageClient() {
       } else if (type === 'anime') {
         data = await getDoubanRecommends({
           kind: primarySelection === '番剧' ? 'tv' : 'movie',
-          pageLimit: 25,
+          pageLimit: PAGE_SIZE,
           pageStart: 0,
           category: '动画',
           format: primarySelection === '番剧' ? '电视剧' : '',
@@ -438,7 +466,7 @@ function DoubanPageClient() {
       } else if (primarySelection === '全部') {
         data = await getDoubanRecommends({
           kind: type === 'show' ? 'tv' : (type as 'tv' | 'movie'),
-          pageLimit: 25,
+          pageLimit: PAGE_SIZE,
           pageStart: 0, // 初始数据加载始终从第一页开始
           category: multiLevelValues.type
             ? (multiLevelValues.type as string)
@@ -472,9 +500,12 @@ function DoubanPageClient() {
         );
 
         if (keyParamsMatch) {
-          setDoubanData(data.list);
-          setHasMore(data.list.length !== 0);
-          setLoading(false);
+          // 🚀 使用 flushSync 强制同步更新，避免 React 批处理延迟
+          flushSync(() => {
+            setDoubanData(data.list);
+            setHasMore(data.list.length !== 0);
+            setLoading(false);
+          });
         } else {
           console.log('关键参数不一致，不执行任何操作，避免设置过期数据');
         }
@@ -485,6 +516,11 @@ function DoubanPageClient() {
     } catch (err) {
       console.error(err);
       setLoading(false); // 发生错误时总是停止loading状态
+    } finally {
+      // 🛡️ 清除并发锁（只有当前请求的 cacheKey 匹配时才清除）
+      if (pendingCacheKeyRef.current === cacheKey) {
+        pendingCacheKeyRef.current = null;
+      }
     }
   }, [
     type,
@@ -496,7 +532,7 @@ function DoubanPageClient() {
     customCategories,
   ]);
 
-  // 只在选择器准备好后才加载数据
+  // 只在选择器准备好后才加载数据 - 🚀 智能防抖机制
   useEffect(() => {
     // 只有在选择器准备好时才开始加载
     if (!selectorsReady) {
@@ -508,10 +544,29 @@ function DoubanPageClient() {
       clearTimeout(debounceTimeoutRef.current);
     }
 
-    // 使用防抖机制加载数据，避免连续状态更新触发多次请求
-    debounceTimeoutRef.current = setTimeout(() => {
+    // 🚀 智能防抖：检测是否为首次挂载或 Tab 切换
+    const isTypeChanged = prevTypeRef.current !== type;
+    const shouldExecuteImmediately = isFirstMountRef.current || isTypeChanged;
+
+    // 更新追踪状态
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+    }
+    if (isTypeChanged) {
+      prevTypeRef.current = type;
+    }
+
+    if (shouldExecuteImmediately) {
+      // 🚀 首次挂载或 Tab 切换：立即执行（利用缓存实现 0 延迟体验）
+      console.log('[SmartDebounce] 首次挂载/Tab切换，立即执行');
       loadInitialData();
-    }, 100); // 100ms 防抖延迟
+    } else {
+      // 🚀 筛选条件变化：100ms 防抖，防止快速点击
+      console.log('[SmartDebounce] 筛选条件变化，100ms 防抖');
+      debounceTimeoutRef.current = setTimeout(() => {
+        loadInitialData();
+      }, 100);
+    }
 
     // 清理函数
     return () => {
@@ -562,8 +617,8 @@ function DoubanPageClient() {
               data = await getDoubanList({
                 tag: selectedCategory.query,
                 type: selectedCategory.type,
-                pageLimit: 25,
-                pageStart: currentPage * 25,
+                pageLimit: PAGE_SIZE,
+                pageStart: currentPage * PAGE_SIZE,
               });
             } else {
               throw new Error('没有找到对应的分类');
@@ -578,8 +633,8 @@ function DoubanPageClient() {
           } else if (type === 'anime') {
             data = await getDoubanRecommends({
               kind: primarySelection === '番剧' ? 'tv' : 'movie',
-              pageLimit: 25,
-              pageStart: currentPage * 25,
+              pageLimit: PAGE_SIZE,
+              pageStart: currentPage * PAGE_SIZE,
               category: '动画',
               format: primarySelection === '番剧' ? '电视剧' : '',
               region: multiLevelValues.region
@@ -601,8 +656,8 @@ function DoubanPageClient() {
           } else if (primarySelection === '全部') {
             data = await getDoubanRecommends({
               kind: type === 'show' ? 'tv' : (type as 'tv' | 'movie'),
-              pageLimit: 25,
-              pageStart: currentPage * 25,
+              pageLimit: PAGE_SIZE,
+              pageStart: currentPage * PAGE_SIZE,
               category: multiLevelValues.type
                 ? (multiLevelValues.type as string)
                 : '',
@@ -625,7 +680,7 @@ function DoubanPageClient() {
             });
           } else {
             data = await getDoubanCategories(
-              getRequestParams(currentPage * 25)
+              getRequestParams(currentPage * PAGE_SIZE)
             );
           }
 
@@ -641,8 +696,29 @@ function DoubanPageClient() {
             );
 
             if (keyParamsMatch) {
-              setDoubanData((prev) => [...prev, ...data.list]);
-              setHasMore(data.list.length !== 0);
+              // 🚀 使用 flushSync 强制同步更新，确保数据立即渲染
+              flushSync(() => {
+                // 🔧 双重去重逻辑：防止跨批次和批次内重复数据
+                setDoubanData((prev) => {
+                  const existingIds = new Set(prev.map((item) => item.id));
+                  const uniqueNewItems: DoubanItem[] = [];
+
+                  for (const item of data.list) {
+                    if (!existingIds.has(item.id)) {
+                      existingIds.add(item.id);  // 立即添加，防止批次内重复
+                      uniqueNewItems.push(item);
+                    }
+                  }
+
+                  console.log(
+                    `📊 Batch: ${data.list.length}, Added: ${uniqueNewItems.length}, Duplicates removed: ${data.list.length - uniqueNewItems.length}`
+                  );
+
+                  if (uniqueNewItems.length === 0) return prev;
+                  return [...prev, ...uniqueNewItems];
+                });
+                setHasMore(data.list.length !== 0);
+              });
             } else {
               console.log('关键参数不一致，不执行任何操作，避免设置过期数据');
             }

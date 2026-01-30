@@ -14,6 +14,8 @@ import React, {
   useState,
 } from 'react';
 
+import { useLongPress } from '@/hooks/useLongPress';
+import { isAIRecommendFeatureDisabled } from '@/lib/ai-recommend.client';
 import {
   deleteFavorite,
   deletePlayRecord,
@@ -23,7 +25,6 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { processImageUrl, isSeriesCompleted } from '@/lib/utils';
-import { useLongPress } from '@/hooks/useLongPress';
 
 import { ImagePlaceholder } from '@/components/ImagePlaceholder';
 import MobileActionSheet from '@/components/MobileActionSheet';
@@ -213,6 +214,12 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   useEffect(() => {
     // 如果父组件已传递aiEnabled，跳过本地检测
     if (aiEnabledProp !== undefined || aiCheckCompleteProp !== undefined) {
+      return;
+    }
+
+    if (isAIRecommendFeatureDisabled()) {
+      setAiEnabledLocal(false);
+      setAiCheckCompleteLocal(true);
       return;
     }
 
@@ -714,7 +721,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   return (
     <>
       <div
-        className='@container group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:scale-[1.05] hover:z-30 hover:drop-shadow-2xl'
+        className='@container group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:scale-[1.05] hover:z-30 hover:shadow-2xl'
         onClick={handleClick}
         {...longPressProps}
         style={{

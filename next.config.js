@@ -2,11 +2,14 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 
 const nextConfig = {
-  // 根据环境自动选择输出模式：Vercel自动处理，Docker使用standalone
-  // 本地开发时不使用 standalone 避免 Windows 符号链接权限问题
-  ...(process.env.VERCEL || process.env.DOCKER_BUILD ? { output: 'standalone' } : {}),
+  // 生产环境始终使用 standalone 模式（Vercel/Docker/Zeabur）
+  // 本地开发时（NODE_ENV !== 'production'）不使用 standalone
+  ...(process.env.NODE_ENV === 'production' ? { output: 'standalone' } : {}),
 
   reactStrictMode: false,
+
+  // Puppeteer/Chromium 相关包不进行 bundle（用于 Vercel serverless）
+  serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
 
   // Next.js 16 使用 Turbopack，配置 SVG 加载
   turbopack: {

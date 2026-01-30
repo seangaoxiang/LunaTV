@@ -4,7 +4,7 @@
 import { ChevronLeft, ChevronRight, Info, Play, Volume2, VolumeX } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { useAutoplay } from './hooks/useAutoplay';
 import { useSwipeGesture } from './hooks/useSwipeGesture';
 
@@ -29,7 +29,8 @@ interface HeroBannerProps {
   enableVideo?: boolean; // 是否启用视频自动播放
 }
 
-export default function HeroBanner({
+// 🚀 优化方案6：使用React.memo防止不必要的重渲染
+function HeroBanner({
   items,
   autoPlayInterval = 8000, // Netflix风格：更长的停留时间
   showControls = true,
@@ -349,9 +350,9 @@ export default function HeroBanner({
 
       {/* 内容叠加层 - Netflix风格：左下角 */}
       <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-8 md:px-12 lg:px-16 xl:px-20 pb-12 sm:pb-16 md:pb-20 lg:pb-24">
-        <div className="max-w-2xl space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6">
+        <div className="space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6">
           {/* 标题 - Netflix风格：超大字体 */}
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white drop-shadow-2xl leading-tight">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white drop-shadow-2xl leading-tight break-words">
             {currentItem.title}
           </h1>
 
@@ -478,3 +479,5 @@ export default function HeroBanner({
     </div>
   );
 }
+
+export default memo(HeroBanner);
