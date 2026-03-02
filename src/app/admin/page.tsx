@@ -43,7 +43,7 @@ import {
   Users,
   Video,
 } from 'lucide-react';
-import { GripVertical, KeyRound } from 'lucide-react';
+import { GripVertical, KeyRound, MessageSquare } from 'lucide-react';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -59,10 +59,12 @@ import { TelegramAuthConfig } from '@/components/TelegramAuthConfig';
 import { OIDCAuthConfig } from '@/components/OIDCAuthConfig';
 import TVBoxSecurityConfig from '@/components/TVBoxSecurityConfig';
 import TrustedNetworkConfig from '@/components/TrustedNetworkConfig';
+import DanmuApiConfig from '@/components/DanmuApiConfig';
 import { TVBoxTokenCell, TVBoxTokenModal } from '@/components/TVBoxTokenManager';
 import YouTubeConfig from '@/components/YouTubeConfig';
 import ShortDramaConfig from '@/components/ShortDramaConfig';
 import DownloadConfig from '@/components/OfflineDownloadConfig';
+import EmbyConfig from '@/components/EmbyConfig';
 import CustomAdFilterConfig from '@/components/CustomAdFilterConfig';
 import WatchRoomConfig from '@/components/WatchRoomConfig';
 import PerformanceMonitor from '@/components/admin/PerformanceMonitor';
@@ -174,7 +176,7 @@ const AlertModal = ({
   };
 
   return createPortal(
-    <div className={`fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
       <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full border ${getBgColor()} transition-all duration-200 ${isVisible ? 'scale-100' : 'scale-95'}`}>
         <div className="p-6 text-center">
           <div className="flex justify-center mb-4">
@@ -289,6 +291,7 @@ interface SiteConfig {
   DisableYellowFilter: boolean;
   ShowAdultContent: boolean;
   FluidSearch: boolean;
+  EnableWebLive: boolean;
   EnablePuppeteer: boolean; // 豆瓣 Puppeteer 开关
   DoubanCookies?: string; // 豆瓣认证 Cookies
   // TMDB配置
@@ -1753,7 +1756,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 配置用户采集源权限弹窗 */}
       {showConfigureApisModal && selectedUser && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           setShowConfigureApisModal(false);
           setSelectedUser(null);
           setSelectedApis([]);
@@ -1912,7 +1915,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 添加用户组弹窗 */}
       {showAddUserGroupForm && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           setShowAddUserGroupForm(false);
           setNewUserGroup({ name: '', enabledApis: [], showAdultContent: false });
         }}>
@@ -2140,7 +2143,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 编辑用户组弹窗 */}
       {showEditUserGroupForm && editingUserGroup && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           setShowEditUserGroupForm(false);
           setEditingUserGroup(null);
         }}>
@@ -2352,7 +2355,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 配置用户组弹窗 */}
       {showConfigureUserGroupModal && selectedUserForGroup && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           setShowConfigureUserGroupModal(false);
           setSelectedUserForGroup(null);
           setSelectedUserGroups([]);
@@ -2448,7 +2451,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 删除用户组确认弹窗 */}
       {showDeleteUserGroupModal && deletingUserGroup && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           setShowDeleteUserGroupModal(false);
           setDeletingUserGroup(null);
         }}>
@@ -2548,7 +2551,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 删除用户确认弹窗 */}
       {showDeleteUserModal && deletingUser && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           // 删除中禁止关闭弹窗
           if (isLoading(`deleteUser_${deletingUser}`)) return;
           setShowDeleteUserModal(false);
@@ -2638,7 +2641,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 批量设置用户组弹窗 */}
       {showBatchUserGroupModal && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => {
           setShowBatchUserGroupModal(false);
           setSelectedUserGroup('');
         }}>
@@ -3077,6 +3080,38 @@ const VideoSourceConfig = ({
       });
     }
   };
+
+  // 一键选中失效视频源（状态为 no_results 或 invalid）
+  const handleSelectInvalidSources = useCallback(() => {
+    const invalidKeys = validationResults
+      .filter((r) => r.status === 'no_results' || r.status === 'invalid')
+      .map((r) => r.key);
+
+    if (invalidKeys.length === 0) {
+      showAlert({
+        type: 'warning',
+        title: '没有失效的视频源',
+        message: '当前没有检测到失效或无法搜索的视频源',
+        timer: 3000,
+      });
+      return;
+    }
+
+    setSelectedSources(new Set(invalidKeys));
+    showAlert({
+      type: 'success',
+      title: '已选中失效源',
+      message: `已选中 ${invalidKeys.length} 个失效或无法搜索的视频源`,
+      timer: 3000,
+    });
+  }, [validationResults, showAlert]);
+
+  // 获取失效视频源数量
+  const invalidSourceCount = useMemo(() => {
+    return validationResults.filter(
+      (r) => r.status === 'no_results' || r.status === 'invalid',
+    ).length;
+  }, [validationResults]);
 
   const handleAddSource = () => {
     if (!newSource.name || !newSource.key || !newSource.api) return;
@@ -3931,23 +3966,23 @@ const VideoSourceConfig = ({
           <div className='flex items-center gap-2 order-1 sm:order-2'>
             <button
               onClick={() => setImportExportModal({ isOpen: true, mode: 'import' })}
-              className='px-3 py-1 text-sm rounded-lg transition-colors flex items-center space-x-1 bg-linear-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white'
+              className='group px-4 py-2 text-sm rounded-xl font-medium flex items-center space-x-2 bg-gradient-to-br from-blue-600 via-cyan-500 to-blue-500 hover:from-blue-700 hover:via-cyan-600 hover:to-blue-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-cyan-500/40 hover:-translate-y-0.5 active:scale-95 transition-all duration-300 backdrop-blur-sm border border-white/10'
               title='从 JSON 文件导入视频源'
             >
-              <Upload className='w-4 h-4' />
+              <Upload className='w-4 h-4 group-hover:scale-110 transition-transform duration-300' />
               <span className='hidden sm:inline'>导入视频源</span>
               <span className='sm:hidden'>导入</span>
             </button>
             <button
               onClick={() => setImportExportModal({ isOpen: true, mode: 'export' })}
-              className='px-3 py-1 text-sm rounded-lg transition-colors flex items-center space-x-1 bg-linear-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 text-white'
+              className='group px-4 py-2 text-sm rounded-xl font-medium flex items-center space-x-2 bg-gradient-to-br from-green-600 via-emerald-500 to-teal-500 hover:from-green-700 hover:via-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-emerald-500/40 hover:-translate-y-0.5 active:scale-95 transition-all duration-300 backdrop-blur-sm border border-white/10'
               title={
                 selectedSources.size > 0
                   ? `导出选中的 ${selectedSources.size} 个视频源`
                   : '导出所有视频源'
               }
             >
-              <Download className='w-4 h-4' />
+              <Download className='w-4 h-4 group-hover:scale-110 transition-transform duration-300' />
               <span className='hidden sm:inline'>
                 {selectedSources.size > 0
                   ? `导出已选(${selectedSources.size})`
@@ -3958,25 +3993,75 @@ const VideoSourceConfig = ({
             <button
               onClick={() => setShowValidationModal(true)}
               disabled={isValidating}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors flex items-center space-x-1 ${isValidating
-                ? buttonStyles.disabled
-                : buttonStyles.primary
-                }`}
+              className={`group px-4 py-2 text-sm rounded-xl font-medium flex items-center space-x-2 ${
+                isValidating
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-br from-purple-600 via-indigo-500 to-purple-500 hover:from-purple-700 hover:via-indigo-600 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:scale-95 backdrop-blur-sm border border-white/10'
+              } transition-all duration-300`}
             >
               {isValidating ? (
                 <>
-                  <div className='w-3 h-3 border border-white border-t-transparent rounded-full animate-spin'></div>
+                  <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
                   <span>检测中...</span>
                 </>
               ) : (
-                '有效性检测'
+                <>
+                  <svg className='w-4 h-4 group-hover:scale-110 transition-transform duration-300' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' />
+                  </svg>
+                  <span>有效性检测</span>
+                </>
               )}
             </button>
+            {/* 选中失效源按钮 - 只在有检测结果且存在失效源时显示 */}
+            {!isValidating && invalidSourceCount > 0 && (
+              <button
+                onClick={handleSelectInvalidSources}
+                className='group relative px-4 py-2 text-sm rounded-xl font-medium flex items-center space-x-2 bg-gradient-to-br from-orange-500 via-red-500 to-pink-600 hover:from-orange-600 hover:via-red-600 hover:to-pink-700 text-white shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5 active:scale-95 transition-all duration-300 backdrop-blur-sm border border-white/10'
+                title={`一键选中 ${invalidSourceCount} 个失效或无法搜索的视频源`}
+              >
+                <svg
+                  className='w-4 h-4 group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+                  />
+                </svg>
+                <span className='hidden sm:inline'>
+                  选中失效源({invalidSourceCount})
+                </span>
+                <span className='sm:hidden'>{invalidSourceCount}</span>
+              </button>
+            )}
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className={showAddForm ? buttonStyles.secondary : buttonStyles.success}
+              className={`group px-4 py-2 text-sm rounded-xl font-medium flex items-center space-x-2 transition-all duration-300 backdrop-blur-sm border border-white/10 ${
+                showAddForm
+                  ? 'bg-gradient-to-br from-gray-500 via-gray-600 to-gray-500 hover:from-gray-600 hover:via-gray-700 hover:to-gray-600 text-white shadow-lg shadow-gray-500/30 hover:shadow-xl hover:shadow-gray-600/40'
+                  : 'bg-gradient-to-br from-emerald-600 via-green-500 to-teal-500 hover:from-emerald-700 hover:via-green-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-green-500/40'
+              } hover:-translate-y-0.5 active:scale-95`}
             >
-              {showAddForm ? '取消' : '添加视频源'}
+              {showAddForm ? (
+                <>
+                  <svg className='w-4 h-4 group-hover:rotate-90 transition-transform duration-300' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
+                  </svg>
+                  <span>取消</span>
+                </>
+              ) : (
+                <>
+                  <svg className='w-4 h-4 group-hover:rotate-90 transition-transform duration-300' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 4v16m8-8H4' />
+                  </svg>
+                  <span>添加视频源</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -4312,7 +4397,7 @@ const VideoSourceConfig = ({
 
       {/* 有效性检测弹窗 */}
       {showValidationModal && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50' onClick={() => setShowValidationModal(false)}>
+        <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50' onClick={() => setShowValidationModal(false)}>
           <div className='bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4' onClick={(e) => e.stopPropagation()}>
             <h3 className='text-lg font-medium text-gray-900 dark:text-gray-100 mb-4'>
               视频源有效性检测
@@ -4363,7 +4448,7 @@ const VideoSourceConfig = ({
 
       {/* 批量操作确认弹窗 */}
       {confirmModal.isOpen && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={confirmModal.onCancel}>
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={confirmModal.onCancel}>
           <div className='bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full' onClick={(e) => e.stopPropagation()}>
             <div className='p-6'>
               <div className='flex items-center justify-between mb-4'>
@@ -5028,6 +5113,7 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     DisableYellowFilter: false,
     ShowAdultContent: false,
     FluidSearch: true,
+    EnableWebLive: false,
     // TMDB配置默认值
     TMDBApiKey: '',
     TMDBLanguage: 'zh-CN',
@@ -5107,6 +5193,7 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
         ShowAdultContent: config.SiteConfig.ShowAdultContent || false,
         FluidSearch: config.SiteConfig.FluidSearch || true,
+        EnableWebLive: config.SiteConfig.EnableWebLive ?? false,
         // TMDB配置
         TMDBApiKey: config.SiteConfig.TMDBApiKey || '',
         TMDBLanguage: config.SiteConfig.TMDBLanguage || 'zh-CN',
@@ -5789,6 +5876,38 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
         </div>
         <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
           启用后搜索结果将实时流式返回，提升用户体验。
+        </p>
+      </div>
+
+      {/* 启用网页直播 */}
+      <div>
+        <div className='flex items-center justify-between'>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            启用网页直播
+          </label>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                EnableWebLive: !prev.EnableWebLive,
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${siteSettings.EnableWebLive
+              ? buttonStyles.toggleOn
+              : buttonStyles.toggleOff
+              }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full ${buttonStyles.toggleThumb} transition-transform ${siteSettings.EnableWebLive
+                ? buttonStyles.toggleThumbOn
+                : buttonStyles.toggleThumbOff
+                }`}
+            />
+          </button>
+        </div>
+        <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+          网页直播性能较差，会导致服务器内存泄露，建议谨慎开启。
         </p>
       </div>
 
@@ -6876,11 +6995,13 @@ function AdminPageClient() {
     aiRecommendConfig: false,
     youtubeConfig: false,
     shortDramaConfig: false,
+    embyConfig: false,
     downloadConfig: false,
     customAdFilter: false,
     watchRoomConfig: false,
     tvboxSecurityConfig: false,
     trustedNetworkConfig: false,
+    danmuApiConfig: false,
     telegramAuthConfig: false,
     oidcAuthConfig: false,
     configFile: false,
@@ -6985,7 +7106,7 @@ function AdminPageClient() {
   return (
     <PageLayout activePath='/admin'>
       <div className='-mt-6 md:mt-0'>
-        <div className='max-w-[95%] mx-auto pb-32 md:pb-safe-bottom'>
+        <div className='max-w-[95%] mx-auto pb-40 md:pb-safe-bottom'>
           {/* 标题 + 重置配置按钮 */}
           <div className='flex items-center gap-2 mb-8'>
             <h1 className='text-2xl font-bold text-gray-900 dark:text-gray-100'>
@@ -7162,6 +7283,21 @@ function AdminPageClient() {
               <ShortDramaConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
+            {/* Emby配置标签 */}
+            <CollapsibleTab
+              title='Emby私人影库'
+              icon={
+                <FolderOpen
+                  size={20}
+                  className='text-indigo-600 dark:text-indigo-400'
+                />
+              }
+              isExpanded={expandedTabs.embyConfig}
+              onToggle={() => toggleTab('embyConfig')}
+            >
+              <EmbyConfig config={config} refreshConfig={fetchConfig} />
+            </CollapsibleTab>
+
             {/* 下载配置标签 */}
             <CollapsibleTab
               title='下载配置'
@@ -7236,6 +7372,23 @@ function AdminPageClient() {
                 onToggle={() => toggleTab('trustedNetworkConfig')}
               >
                 <TrustedNetworkConfig config={config} refreshConfig={fetchConfig} />
+              </CollapsibleTab>
+            )}
+
+            {/* 弹幕API配置 - 仅站长可见 */}
+            {role === 'owner' && (
+              <CollapsibleTab
+                title='弹幕API配置'
+                icon={
+                  <MessageSquare
+                    size={20}
+                    className='text-purple-600 dark:text-purple-400'
+                  />
+                }
+                isExpanded={expandedTabs.danmuApiConfig}
+                onToggle={() => toggleTab('danmuApiConfig')}
+              >
+                <DanmuApiConfig config={config} refreshConfig={fetchConfig} />
               </CollapsibleTab>
             )}
 
@@ -7414,7 +7567,7 @@ function AdminPageClient() {
 
       {/* 重置配置确认弹窗 */}
       {showResetConfigModal && createPortal(
-        <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => setShowResetConfigModal(false)}>
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4' onClick={() => setShowResetConfigModal(false)}>
           <div className='bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full' onClick={(e) => e.stopPropagation()}>
             <div className='p-6'>
               <div className='flex items-center justify-between mb-6'>

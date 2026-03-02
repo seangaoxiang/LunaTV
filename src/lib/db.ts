@@ -60,6 +60,16 @@ export class DbManager {
 
   constructor() {
     this.storage = getStorage();
+    // 启动时自动触发数据迁移（异步，不阻塞构造）
+    if (this.storage && typeof (this.storage as any).migrateData === 'function') {
+      (this.storage as any).migrateData().then(async () => {
+        if (typeof (this.storage as any).migratePasswords === 'function') {
+          await (this.storage as any).migratePasswords();
+        }
+      }).catch((err: any) => {
+        console.error('数据迁移异常:', err);
+      });
+    }
   }
 
   // 播放记录相关方法
@@ -101,6 +111,30 @@ export class DbManager {
     await this.storage.deletePlayRecord(userName, key);
   }
 
+  // 🚀 批量保存播放记录（Upstash 优化，使用 mset 只算1条命令）
+  async savePlayRecordsBatch(
+    userName: string,
+    records: Array<{ source: string; id: string; record: PlayRecord }>
+  ): Promise<void> {
+    if (records.length === 0) return;
+
+    // 检查 storage 是否支持批量操作
+    if (typeof this.storage.setPlayRecordsBatch === 'function') {
+      incrementDbQuery();
+      const batchData: { [key: string]: PlayRecord } = {};
+      for (const { source, id, record } of records) {
+        const key = generateStorageKey(source, id);
+        batchData[key] = record;
+      }
+      await this.storage.setPlayRecordsBatch(userName, batchData);
+    } else {
+      // 回退：逐条保存
+      for (const { source, id, record } of records) {
+        await this.savePlayRecord(userName, source, id, record);
+      }
+    }
+  }
+
   // 收藏相关方法
   async getFavorite(
     userName: string,
@@ -138,6 +172,30 @@ export class DbManager {
     incrementDbQuery();
     const key = generateStorageKey(source, id);
     await this.storage.deleteFavorite(userName, key);
+  }
+
+  // 🚀 批量保存收藏（Upstash 优化，使用 mset 只算1条命令）
+  async saveFavoritesBatch(
+    userName: string,
+    favorites: Array<{ source: string; id: string; favorite: Favorite }>
+  ): Promise<void> {
+    if (favorites.length === 0) return;
+
+    // 检查 storage 是否支持批量操作
+    if (typeof this.storage.setFavoritesBatch === 'function') {
+      incrementDbQuery();
+      const batchData: { [key: string]: Favorite } = {};
+      for (const { source, id, favorite } of favorites) {
+        const key = generateStorageKey(source, id);
+        batchData[key] = favorite;
+      }
+      await this.storage.setFavoritesBatch(userName, batchData);
+    } else {
+      // 回退：逐条保存
+      for (const { source, id, favorite } of favorites) {
+        await this.saveFavorite(userName, source, id, favorite);
+      }
+    }
   }
 
   async isFavorited(
@@ -501,7 +559,31 @@ export class DbManager {
     const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
     return storageType !== 'localstorage';
   }
+
+  // 用户 Emby 配置相关方法
+  async getUserEmbyConfig(userName: string): Promise<any | null> {
+    incrementDbQuery();
+    if (typeof (this.storage as any).getUserEmbyConfig === 'function') {
+      return (this.storage as any).getUserEmbyConfig(userName);
+    }
+    return null;
+  }
+
+  async saveUserEmbyConfig(userName: string, config: any): Promise<void> {
+    incrementDbQuery();
+    if (typeof (this.storage as any).saveUserEmbyConfig === 'function') {
+      await (this.storage as any).saveUserEmbyConfig(userName, config);
+    }
+  }
+
+  async deleteUserEmbyConfig(userName: string): Promise<void> {
+    incrementDbQuery();
+    if (typeof (this.storage as any).deleteUserEmbyConfig === 'function') {
+      await (this.storage as any).deleteUserEmbyConfig(userName);
+    }
+  }
 }
 
 // 导出默认实例
 export const db = new DbManager();
+export const dbManager = db; // 别名，方便使用

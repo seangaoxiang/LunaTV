@@ -4,25 +4,26 @@
 
 import { ChevronRight, Film, Tv, Calendar, Sparkles, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { Suspense, useEffect, useState, useRef, useMemo, useReducer } from 'react';
+import { Suspense, useEffect, useState, useRef, useMemo, useReducer, useTransition } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   BangumiCalendarData,
 } from '@/lib/bangumi.client';
-import { cleanExpiredCache } from '@/lib/shortdrama-cache';
+import { cleanExpiredCache, clearRecommendsCache } from '@/lib/shortdrama-cache';
 import { ShortDramaItem, ReleaseCalendarItem } from '@/lib/types';
 // 客户端收藏 API
 import {
-  clearAllFavorites,
   getAllFavorites,
   getAllPlayRecords,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+// 🚀 TanStack Query Mutations
+import { useClearFavoritesMutation } from '@/hooks/useFavoritesMutations';
+import { useHomePageQueries } from '@/hooks/useHomePageQueries';
 import { getDoubanDetails } from '@/lib/douban.client';
 import { DoubanItem } from '@/lib/types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
-import { useGlobalCache } from '@/contexts/GlobalCacheContext';
 
 import CapsuleSwitch from '@/components/CapsuleSwitch';
 import ContinueWatching from '@/components/ContinueWatching';
@@ -113,8 +114,17 @@ function HomeClient() {
   // 🚀 TanStack Query - 全局缓存管理
   const queryClient = useQueryClient();
 
-  // 🚀 GlobalCache - 首页数据全局缓存
-  const { homeData, homeLoading, fetchHomeData } = useGlobalCache();
+  // 🚀 TanStack Query - 首页数据查询（替代 GlobalCache）
+  const {
+    data: homeData,
+    isLoading: homeLoading,
+    isFetching: homeFetching,
+    errors: homeErrors,
+    refetch: refetchHomeData,
+  } = useHomePageQueries();
+
+  // 🎯 优化：使用 useTransition 让 tab 切换不阻塞 UI
+  const [isPending, startTransition] = useTransition();
 
   // 🎯 优化：使用 useReducer 合并本地状态
   const [state, dispatch] = useReducer(homeReducer, {
@@ -141,7 +151,7 @@ function HomeClient() {
     showAnnouncement,
   } = state;
 
-  // 🚀 从 GlobalCache 获取首页数据，本地状态作为详情增强
+  // 🚀 从 TanStack Query 获取首页数据，本地状态作为详情增强
   const hotMovies = useMemo(() => {
     const cached = homeData?.hotMovies || [];
     // 合并本地详情数据
@@ -200,8 +210,8 @@ function HomeClient() {
 
   const bangumiCalendarData = homeData?.bangumiCalendar || [];
 
-  // 🚀 计算 loading 状态：无缓存数据时显示 loading
-  const loading = homeLoading && !homeData;
+  // 🚀 计算 loading 状态：首次加载时显示 loading
+  const loading = homeLoading;
 
   // 🚀 Web Worker引用
   const workerRef = useRef<Worker | null>(null);
@@ -369,8 +379,10 @@ function HomeClient() {
     // 清理过期缓存
     cleanExpiredCache().catch(console.error);
 
-    // 🚀 使用 GlobalCacheContext 加载首页数据
-    fetchHomeData();
+    // 清除可能缓存了空数据的短剧推荐缓存
+    clearRecommendsCache().catch(console.error);
+
+    // 🚀 TanStack Query 会自动加载数据，无需手动调用
 
     // 🚀 清理Web Worker
     return () => {
@@ -380,7 +392,15 @@ function HomeClient() {
         console.log('📅 [Main] Web Worker已清理');
       }
     };
-  }, [fetchHomeData]);
+  }, []);
+
+  // 如果首页数据加载完成但热门短剧为空，强制刷新（可能之前缓存了空数据）
+  useEffect(() => {
+    if (homeData && homeData.hotShortDramas.length === 0 && !homeLoading) {
+      console.log('[TanStack Query] 热门短剧为空，强制刷新首页数据');
+      refetchHomeData();
+    }
+  }, [homeData, homeLoading, refetchHomeData]);
 
   // 🚀 当 GlobalCache 数据加载完成后，延迟加载详情数据
   useEffect(() => {
@@ -595,12 +615,9 @@ function HomeClient() {
       });
   }, [homeData]);
 
-  // 🚀 TanStack Query - 处理清空所有收藏（使用 queryClient 刷新缓存）
-  const handleClearFavorites = async () => {
-    await clearAllFavorites();
-    // 刷新收藏数据缓存
-    queryClient.invalidateQueries({ queryKey: ['favorites'] });
-  };
+  // 🚀 TanStack Query - 使用 useMutation 管理清空收藏操作
+  // 特性：乐观更新（立即清空 UI）+ 错误回滚（失败时恢复数据）
+  const clearFavoritesMutation = useClearFavoritesMutation();
 
   // 🚀 TanStack Query - 监听数据更新事件，自动刷新缓存
   useEffect(() => {
@@ -680,11 +697,11 @@ function HomeClient() {
               { label: '收藏夹', value: 'favorites' },
             ]}
             active={activeTab}
-            onChange={(value) => dispatch({ type: 'SET_ACTIVE_TAB', payload: value as 'home' | 'favorites' })}
+            onChange={(value) => startTransition(() => dispatch({ type: 'SET_ACTIVE_TAB', payload: value as 'home' | 'favorites' }))}
           />
         </div>
 
-        <div className='w-full mx-auto'>
+        <div className={`w-full mx-auto ${isPending ? 'opacity-70 transition-opacity duration-150' : ''}`}>
           {activeTab === 'favorites' ? (
             // 收藏夹视图
             <section className='mb-8'>
@@ -700,7 +717,9 @@ function HomeClient() {
                       if (requireClearConfirmation) {
                         setShowClearFavoritesDialog(true);
                       } else {
-                        handleClearFavorites();
+                        // 🚀 使用 mutation.mutate() 清空收藏
+                        // 特性：立即清空 UI（乐观更新），失败时自动回滚
+                        clearFavoritesMutation.mutate();
                       }
                     }}
                   >
@@ -930,7 +949,12 @@ function HomeClient() {
                 confirmText="确认清空"
                 cancelText="取消"
                 variant="danger"
-                onConfirm={handleClearFavorites}
+                onConfirm={() => {
+                  // 🚀 使用 mutation.mutate() 清空收藏
+                  // 特性：立即清空 UI（乐观更新），失败时自动回滚
+                  clearFavoritesMutation.mutate();
+                  setShowClearFavoritesDialog(false);
+                }}
                 onCancel={() => setShowClearFavoritesDialog(false)}
               />
             </section>
@@ -998,7 +1022,7 @@ function HomeClient() {
                     autoPlayInterval={8000}
                     showControls={true}
                     showIndicators={true}
-                    enableVideo={true}
+                    enableVideo={!(window as any).RUNTIME_CONFIG?.DISABLE_HERO_TRAILER}
                   />
                 </section>
               )}

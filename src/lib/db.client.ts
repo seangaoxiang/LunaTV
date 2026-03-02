@@ -543,7 +543,6 @@ async function handleDatabaseOperationFailure(
   error: any
 ): Promise<void> {
   console.error(`数据库操作失败 (${dataType}):`, error);
-  triggerGlobalError(`数据库操作失败`);
 
   try {
     let freshData: any;
@@ -579,7 +578,6 @@ async function handleDatabaseOperationFailure(
     );
   } catch (refreshErr) {
     console.error(`刷新${dataType}缓存失败:`, refreshErr);
-    triggerGlobalError(`刷新${dataType}缓存失败`);
   }
 }
 
@@ -760,14 +758,14 @@ async function checkShouldUpdateOriginalEpisodes(existingRecord: PlayRecord, new
   console.log(`🔍 用户看了第${newRecord.index}集（超过原始${originalEpisodes}集），从数据库获取最新集数...`);
 
   try {
-    const latestTotalEpisodes = Math.max(freshRecord.total_episodes, originalEpisodes);
-    console.log(`✓ 应更新原始集数: ${existingRecord.title} - 用户看了第${newRecord.index}集（超过原始${originalEpisodes}集），数据库最新集数${freshRecord.total_episodes}集 → 更新原始集数为${latestTotalEpisodes}集`);
+    const latestTotalEpisodes = Math.max(freshRecord.total_episodes, originalEpisodes, newRecord.total_episodes);
+    console.log(`✓ 应更新原始集数: ${existingRecord.title} - 用户看了第${newRecord.index}集（超过原始${originalEpisodes}集），数据库最新集数${freshRecord.total_episodes}集，播放器集数${newRecord.total_episodes}集 → 更新原始集数为${latestTotalEpisodes}集`);
 
     return { shouldUpdate: true, latestTotalEpisodes };
   } catch (error) {
     console.error('❌ 获取最新集数失败:', error);
     // 失败时仍然更新，使用保守的值
-    return { shouldUpdate: true, latestTotalEpisodes: Math.max(newRecord.total_episodes, originalEpisodes) };
+    return { shouldUpdate: true, latestTotalEpisodes: Math.max(newRecord.total_episodes, originalEpisodes, existingRecord.total_episodes) };
   }
 }
 
@@ -803,7 +801,6 @@ export async function getAllPlayRecords(forceRefresh = false): Promise<Record<st
         return freshData;
       } catch (err) {
         console.error('强制刷新播放记录失败:', err);
-        triggerGlobalError('获取播放记录失败');
         // 失败时尝试返回缓存数据作为降级
         const cachedData = cacheManager.getCachedPlayRecords();
         return cachedData || {};
@@ -851,9 +848,9 @@ export async function getAllPlayRecords(forceRefresh = false): Promise<Record<st
 
         // 如果是超时错误，提供更友好的提示
         if (errorMessage.includes('超时')) {
-          triggerGlobalError('网络连接超时，请检查网络或稍后重试');
+          console.warn('网络连接超时，请检查网络或稍后重试');
         } else {
-          triggerGlobalError('获取播放记录失败，请稍后重试');
+          console.warn('获取播放记录失败，请稍后重试');
         }
 
         // 返回空对象作为降级方案
@@ -869,7 +866,6 @@ export async function getAllPlayRecords(forceRefresh = false): Promise<Record<st
     return JSON.parse(raw) as Record<string, PlayRecord>;
   } catch (err) {
     console.error('读取播放记录失败:', err);
-    triggerGlobalError('读取播放记录失败');
     return {};
   }
 }
@@ -908,6 +904,7 @@ export async function savePlayRecord(
   }
 
   // 检查用户是否观看了超过原始集数的新集数
+  let shouldClearCache = false;
   if (existingRecord?.original_episodes && existingRecord.original_episodes > 0) {
     // 🔧 优化：在常规保存时跳过 fetch（skipFetch = true），使用缓存数据检查
     // 这样可以避免每次保存都发送 GET 请求，大幅减少网络开销
@@ -919,7 +916,7 @@ export async function savePlayRecord(
       console.log(`✓ 更新原始集数: ${key} = ${existingRecord.original_episodes}集 -> ${updateResult.latestTotalEpisodes}集（用户已观看新集数）`);
 
       // 🔑 标记需要清除缓存（在数据库更新成功后执行）
-      (record as any)._shouldClearCache = true;
+      shouldClearCache = true;
     }
   }
 
@@ -948,7 +945,7 @@ export async function savePlayRecord(
       });
 
       // 🔑 关键修复：数据库更新成功后，如果更新了 original_episodes，清除相关缓存
-      if ((record as any)._shouldClearCache) {
+      if (shouldClearCache) {
         try {
           // 🔧 优化：使用新函数清除 watching-updates 缓存
           forceClearWatchingUpdatesCache();
@@ -966,7 +963,6 @@ export async function savePlayRecord(
           );
 
           console.log('✅ 数据库更新成功，已清除 watching-updates 和播放记录缓存，并刷新最新数据');
-          delete (record as any)._shouldClearCache;
         } catch (cacheError) {
           console.warn('清除缓存失败:', cacheError);
         }
@@ -981,7 +977,6 @@ export async function savePlayRecord(
       });
     } catch (err) {
       await handleDatabaseOperationFailure('playRecords', err);
-      triggerGlobalError('保存播放记录失败');
       throw err;
     }
     return;
@@ -1009,7 +1004,6 @@ export async function savePlayRecord(
     });
   } catch (err) {
     console.error('保存播放记录失败:', err);
-    triggerGlobalError('保存播放记录失败');
     throw err;
   }
 }
@@ -1119,7 +1113,6 @@ export async function getSearchHistory(): Promise<string[]> {
         return freshData;
       } catch (err) {
         console.error('获取搜索历史失败:', err);
-        triggerGlobalError('获取搜索历史失败');
         return [];
       }
     }
@@ -1134,7 +1127,6 @@ export async function getSearchHistory(): Promise<string[]> {
     return Array.isArray(arr) ? arr : [];
   } catch (err) {
     console.error('读取搜索历史失败:', err);
-    triggerGlobalError('读取搜索历史失败');
     return [];
   }
 }
@@ -1198,7 +1190,6 @@ export async function addSearchHistory(keyword: string): Promise<void> {
     );
   } catch (err) {
     console.error('保存搜索历史失败:', err);
-    triggerGlobalError('保存搜索历史失败');
   }
 }
 
@@ -1290,7 +1281,6 @@ export async function deleteSearchHistory(keyword: string): Promise<void> {
     );
   } catch (err) {
     console.error('删除搜索历史失败:', err);
-    triggerGlobalError('删除搜索历史失败');
   }
 }
 
@@ -1342,7 +1332,6 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
         return freshData;
       } catch (err) {
         console.error('获取收藏失败:', err);
-        triggerGlobalError('获取收藏失败');
         return {};
       }
     }
@@ -1355,7 +1344,6 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
     return JSON.parse(raw) as Record<string, Favorite>;
   } catch (err) {
     console.error('读取收藏失败:', err);
-    triggerGlobalError('读取收藏失败');
     return {};
   }
 }
@@ -1528,7 +1516,6 @@ export async function isFavorited(
         return !!freshData[key];
       } catch (err) {
         console.error('检查收藏状态失败:', err);
-        triggerGlobalError('检查收藏状态失败');
         return false;
       }
     }
@@ -1707,7 +1694,6 @@ export async function refreshAllCache(): Promise<void> {
     }
   } catch (err) {
     console.error('刷新缓存失败:', err);
-    triggerGlobalError('刷新缓存失败');
   }
 }
 
@@ -1805,7 +1791,6 @@ export async function preloadUserData(): Promise<void> {
   // 后台静默预加载，不阻塞界面
   refreshAllCache().catch((err) => {
     console.warn('预加载用户数据失败:', err);
-    triggerGlobalError('预加载用户数据失败');
   });
 }
 
@@ -1945,7 +1930,6 @@ export async function saveSkipConfig(
     }
   } catch (err) {
     console.error('保存跳过配置失败:', err);
-    triggerGlobalError('保存跳过配置失败');
     throw err;
   }
 }
@@ -1996,7 +1980,6 @@ export async function getAllSkipConfigs(): Promise<Record<string, EpisodeSkipCon
         return freshData;
       } catch (err) {
         console.error('获取跳过片头片尾配置失败:', err);
-        triggerGlobalError('获取跳过片头片尾配置失败');
         return {};
       }
     }
@@ -2009,7 +1992,6 @@ export async function getAllSkipConfigs(): Promise<Record<string, EpisodeSkipCon
     return JSON.parse(raw) as Record<string, EpisodeSkipConfig>;
   } catch (err) {
     console.error('读取跳过片头片尾配置失败:', err);
-    triggerGlobalError('读取跳过片头片尾配置失败');
     return {};
   }
 }
@@ -2078,7 +2060,6 @@ export async function deleteSkipConfig(
     }
   } catch (err) {
     console.error('删除跳过片头片尾配置失败:', err);
-    triggerGlobalError('删除跳过片头片尾配置失败');
     throw err;
   }
 }

@@ -15,10 +15,11 @@ import { ShortDramaCategory, ShortDramaItem } from '@/lib/types';
 
 import PageLayout from '@/components/PageLayout';
 import ShortDramaCard from '@/components/ShortDramaCard';
+import VirtualGrid from '@/components/VirtualGrid';
 
 export default function ShortDramaPage() {
   const [categories, setCategories] = useState<ShortDramaCategory[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<number>(46); // 新API的短剧分类ID是46
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null); // 等分类加载后自动选中第一个
   const [dramas, setDramas] = useState<ShortDramaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -29,10 +30,20 @@ export default function ShortDramaPage() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   // 用于防止分类切换时的闪烁
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // 虚拟化开关状态
+  const [useVirtualization, setUseVirtualization] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('useShortDramaVirtualization');
+      return saved !== null ? JSON.parse(saved) : true; // 默认启用
+    }
+    return true;
+  });
 
   const observer = useRef<IntersectionObserver | undefined>(undefined);
   const lastDramaElementRef = useCallback(
     (node: HTMLDivElement) => {
+      // 虚拟化模式使用 endReached 回调，不需要 IntersectionObserver
+      if (useVirtualization) return;
       if (loading) return;
       if (observer.current) observer.current.disconnect();
       observer.current = new IntersectionObserver((entries) => {
@@ -42,7 +53,7 @@ export default function ShortDramaPage() {
       });
       if (node) observer.current.observe(node);
     },
-    [loading, hasMore]
+    [loading, hasMore, useVirtualization]
   );
 
   // 获取分类列表
@@ -53,6 +64,10 @@ export default function ShortDramaPage() {
     const fetchCategories = async () => {
       const cats = await getShortDramaCategories();
       setCategories(cats);
+      // 自动选中第一个分类
+      if (cats.length > 0 && !selectedCategory) {
+        setSelectedCategory(cats[0].type_id);
+      }
     };
     fetchCategories();
   }, []);
@@ -97,13 +112,15 @@ export default function ShortDramaPage() {
   // 加载短剧列表
   const loadDramas = useCallback(
     async (pageNum: number, reset = false) => {
+      if (!selectedCategory && !isSearchMode) return; // 没有选中分类且不是搜索模式时不加载
+
       setLoading(true);
       try {
         let result: { list: ShortDramaItem[]; hasMore: boolean };
         if (isSearchMode && searchQuery) {
           result = await searchShortDramas(searchQuery, pageNum, 20);
         } else {
-          result = await getShortDramaList(selectedCategory, pageNum, 20);
+          result = await getShortDramaList(selectedCategory!, pageNum, 20);
         }
 
         if (reset) {
@@ -168,6 +185,14 @@ export default function ShortDramaPage() {
     } catch (error) {
       // 如果平滑滚动完全失败，使用立即滚动
       document.body.scrollTop = 0;
+    }
+  };
+
+  const toggleVirtualization = () => {
+    const newValue = !useVirtualization;
+    setUseVirtualization(newValue);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('useShortDramaVirtualization', JSON.stringify(newValue));
     }
   };
 
@@ -245,17 +270,59 @@ export default function ShortDramaPage() {
             </div>
           )}
 
-          {/* 短剧网格 */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {dramas.map((drama, index) => (
-              <div
-                key={`${drama.id}-${index}`}
-                ref={index === dramas.length - 1 ? lastDramaElementRef : null}
-              >
-                <ShortDramaCard drama={drama} />
+          {/* 虚拟化开关 */}
+          <div className='flex justify-end mb-4'>
+            <label className='flex items-center gap-3 cursor-pointer select-none group'>
+              <span className='text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors'>
+                ⚡ 虚拟滑动
+              </span>
+              <div className='relative'>
+                <input
+                  type='checkbox'
+                  className='sr-only peer'
+                  checked={useVirtualization}
+                  onChange={toggleVirtualization}
+                />
+                <div className='w-11 h-6 bg-linear-to-r from-gray-200 to-gray-300 rounded-full peer-checked:from-purple-400 peer-checked:to-pink-500 transition-all duration-300 dark:from-gray-600 dark:to-gray-700 dark:peer-checked:from-purple-500 dark:peer-checked:to-pink-600 shadow-inner'></div>
+                <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 peer-checked:translate-x-5 shadow-lg peer-checked:shadow-purple-300 dark:peer-checked:shadow-purple-500/50 peer-checked:scale-105'></div>
+                <div className='absolute top-1.5 left-1.5 w-3 h-3 flex items-center justify-center pointer-events-none transition-all duration-300 peer-checked:translate-x-5'>
+                  <span className='text-[10px] peer-checked:text-white text-gray-500'>
+                    {useVirtualization ? '✨' : '○'}
+                  </span>
+                </div>
               </div>
-            ))}
+            </label>
           </div>
+
+          {/* 短剧网格 */}
+          {useVirtualization ? (
+            <VirtualGrid
+              items={dramas}
+              className='grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+              rowGapClass='pb-4'
+              estimateRowHeight={280}
+              endReached={() => {
+                if (hasMore && !loading) {
+                  setPage((prevPage) => prevPage + 1);
+                }
+              }}
+              endReachedThreshold={3}
+              renderItem={(drama, index) => (
+                <ShortDramaCard drama={drama} priority={index < 30} />
+              )}
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {dramas.map((drama, index) => (
+                <div
+                  key={`${drama.id}-${index}`}
+                  ref={index === dramas.length - 1 ? lastDramaElementRef : null}
+                >
+                  <ShortDramaCard drama={drama} />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 加载状态 - 只在首次加载或加载更多时显示骨架屏 */}
           {loading && (isInitialLoad || page > 1) && (
